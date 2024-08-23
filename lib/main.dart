@@ -33,22 +33,39 @@ class FakeGpsPageState extends State<FakeGpsPage> {
   final loc.Location _location = loc.Location();
   LatLng _targetLocation = const LatLng(-6.200000, 106.816666); // Jakarta as default location
   final MapController _mapController = MapController();
-  loc.LocationData? _currentLocation;
-  bool _isFakeLocation = false;
   LatLng? _fakeLocation;
+  bool _isFakeGpsActive = false;
 
   @override
   void initState() {
     super.initState();
-    _location.getLocation().then((location) {
-      setState(() {
-        _currentLocation = location;
-        _targetLocation = _formatCoordinates(
-          location.latitude!,
-          location.longitude!,
-        );
-        _mapController.move(_targetLocation, 14.0);
-      });
+    _requestLocationPermission();
+  }
+
+  Future<void> _requestLocationPermission() async {
+    bool serviceEnabled;
+    loc.PermissionStatus permissionGranted;
+
+    serviceEnabled = await _location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await _location.requestService();
+      if (!serviceEnabled) {
+        return;
+      }
+    }
+
+    permissionGranted = await _location.hasPermission();
+    if (permissionGranted == loc.PermissionStatus.denied) {
+      permissionGranted = await _location.requestPermission();
+      if (permissionGranted != loc.PermissionStatus.granted) {
+        return;
+      }
+    }
+
+    final locationData = await _location.getLocation();
+    setState(() {
+      _targetLocation = LatLng(locationData.latitude!, locationData.longitude!);
+      _mapController.move(_targetLocation, 14.0);
     });
   }
 
@@ -60,10 +77,7 @@ class FakeGpsPageState extends State<FakeGpsPage> {
         if (locations.isNotEmpty) {
           final result = locations.first;
           setState(() {
-            _targetLocation = _formatCoordinates(
-              result.latitude,
-              result.longitude,
-            );
+            _targetLocation = LatLng(result.latitude, result.longitude);
             _mapController.move(_targetLocation, 14.0);
           });
         }
@@ -73,34 +87,17 @@ class FakeGpsPageState extends State<FakeGpsPage> {
     }
   }
 
-  LatLng _formatCoordinates(double latitude, double longitude) {
-    return LatLng(
-      double.parse(latitude.toStringAsFixed(7)),
-      double.parse(longitude.toStringAsFixed(7)),
-    );
-  }
-
-  void _onMarkerDragEnd(LatLng newLocation) {
+  void _toggleFakeGps() {
     setState(() {
-      _fakeLocation = LatLng(
-        double.parse(newLocation.latitude.toStringAsFixed(7)),
-        double.parse(newLocation.longitude.toStringAsFixed(7)),
-      );
-    });
-  }
-
-  void _toggleLocation() {
-    setState(() {
-      if (_isFakeLocation) {
-        _targetLocation = _formatCoordinates(
-          _currentLocation!.latitude!,
-          _currentLocation!.longitude!,
-        );
-      } else if (_fakeLocation != null) {
-        _targetLocation = _fakeLocation!;
+      if (_isFakeGpsActive) {
+        // Stop Fake GPS, revert to real location
+        _isFakeGpsActive = false;
+        _fakeLocation = null;
+      } else {
+        // Start Fake GPS, set location to marker's location
+        _isFakeGpsActive = true;
+        _fakeLocation = _targetLocation;
       }
-      _isFakeLocation = !_isFakeLocation;
-      _mapController.move(_targetLocation, 14.0);
     });
   }
 
@@ -115,7 +112,8 @@ class FakeGpsPageState extends State<FakeGpsPage> {
           MapWidget(
             mapController: _mapController,
             targetLocation: _targetLocation,
-            onMarkerDragEnd: _onMarkerDragEnd, // Pass the callback for dragging
+            isFakeGpsActive: _isFakeGpsActive,
+            fakeLocation: _fakeLocation,
           ),
           SearchWidget(
             searchController: _searchController,
@@ -123,23 +121,9 @@ class FakeGpsPageState extends State<FakeGpsPage> {
           ),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            onPressed: () {
-              _mapController.move(_targetLocation, 14.0);
-            },
-            child: const Icon(Icons.my_location),
-          ),
-          const SizedBox(height: 16.0),
-          FloatingActionButton(
-            onPressed: _toggleLocation,
-            child: Icon(
-              _isFakeLocation ? Icons.stop : Icons.play_arrow,
-            ),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: _toggleFakeGps,
+        child: Icon(_isFakeGpsActive ? Icons.stop : Icons.play_arrow),
       ),
     );
   }

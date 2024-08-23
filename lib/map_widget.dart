@@ -8,7 +8,7 @@ class MapWidget extends StatelessWidget {
 
   const MapWidget({super.key, 
     required this.mapController,
-    required this.targetLocation, required void Function(LatLng newLocation) onMarkerDragEnd,
+    required this.targetLocation, required bool isFakeGpsActive, LatLng? fakeLocation,
   });
 
   @override
