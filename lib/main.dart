@@ -33,15 +33,19 @@ class FakeGpsPageState extends State<FakeGpsPage> {
   final loc.Location _location = loc.Location();
   LatLng _targetLocation = const LatLng(-6.200000, 106.816666); // Jakarta as default location
   final MapController _mapController = MapController();
+  loc.LocationData? _currentLocation;
+  bool _isFakeLocation = false;
+  LatLng? _fakeLocation;
 
   @override
   void initState() {
     super.initState();
     _location.getLocation().then((location) {
       setState(() {
-        _targetLocation = LatLng(
-          double.parse(location.latitude!.toStringAsFixed(7)),
-          double.parse(location.longitude!.toStringAsFixed(7)),
+        _currentLocation = location;
+        _targetLocation = _formatCoordinates(
+          location.latitude!,
+          location.longitude!,
         );
         _mapController.move(_targetLocation, 14.0);
       });
@@ -56,9 +60,9 @@ class FakeGpsPageState extends State<FakeGpsPage> {
         if (locations.isNotEmpty) {
           final result = locations.first;
           setState(() {
-            _targetLocation = LatLng(
-              double.parse(result.latitude.toStringAsFixed(7)),
-              double.parse(result.longitude.toStringAsFixed(7)),
+            _targetLocation = _formatCoordinates(
+              result.latitude,
+              result.longitude,
             );
             _mapController.move(_targetLocation, 14.0);
           });
@@ -67,6 +71,37 @@ class FakeGpsPageState extends State<FakeGpsPage> {
         debugPrint("Error in geocoding: $e");
       }
     }
+  }
+
+  LatLng _formatCoordinates(double latitude, double longitude) {
+    return LatLng(
+      double.parse(latitude.toStringAsFixed(7)),
+      double.parse(longitude.toStringAsFixed(7)),
+    );
+  }
+
+  void _onMarkerDragEnd(LatLng newLocation) {
+    setState(() {
+      _fakeLocation = LatLng(
+        double.parse(newLocation.latitude.toStringAsFixed(7)),
+        double.parse(newLocation.longitude.toStringAsFixed(7)),
+      );
+    });
+  }
+
+  void _toggleLocation() {
+    setState(() {
+      if (_isFakeLocation) {
+        _targetLocation = _formatCoordinates(
+          _currentLocation!.latitude!,
+          _currentLocation!.longitude!,
+        );
+      } else if (_fakeLocation != null) {
+        _targetLocation = _fakeLocation!;
+      }
+      _isFakeLocation = !_isFakeLocation;
+      _mapController.move(_targetLocation, 14.0);
+    });
   }
 
   @override
@@ -80,6 +115,7 @@ class FakeGpsPageState extends State<FakeGpsPage> {
           MapWidget(
             mapController: _mapController,
             targetLocation: _targetLocation,
+            onMarkerDragEnd: _onMarkerDragEnd, // Pass the callback for dragging
           ),
           SearchWidget(
             searchController: _searchController,
@@ -87,11 +123,23 @@ class FakeGpsPageState extends State<FakeGpsPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          _mapController.move(_targetLocation, 14.0);
-        },
-        child: const Icon(Icons.my_location),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            onPressed: () {
+              _mapController.move(_targetLocation, 14.0);
+            },
+            child: const Icon(Icons.my_location),
+          ),
+          const SizedBox(height: 16.0),
+          FloatingActionButton(
+            onPressed: _toggleLocation,
+            child: Icon(
+              _isFakeLocation ? Icons.stop : Icons.play_arrow,
+            ),
+          ),
+        ],
       ),
     );
   }
